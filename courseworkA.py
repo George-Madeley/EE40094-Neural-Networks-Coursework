@@ -131,15 +131,12 @@ class NeuralNetwork:
 
     def showStateSpaceRepresentation(self, inputs, targets):
         for layerIdx in range(self.numLayers):
-            if layerIdx == 0:
-                if self.numInputNodes == 3:
-                    bias = self.weights[0][0][-1]
-                    weights = self.weights[0][0][:-1]
-                    print(bias)
-                    print(weights)
-                    seperatorLineX = np.linspace(-1, 2, 100)
-                    seperatorLineY = (-weights[0]/weights[1])*seperatorLineX-(bias/weights[1])
-                    plt.plot(seperatorLineX, seperatorLineY)
+            weights = self.weights[layerIdx]
+            for weightIdx, weight in enumerate(weights):
+                bias = weight[-1]
+                seperatorLineX = np.linspace(-1, 2, 100)
+                seperatorLineY = (-weight[0]/weight[1])*seperatorLineX-(bias/weight[1])
+                plt.plot(seperatorLineX, seperatorLineY, label=f"Seperator {layerIdx},{weightIdx}")
 
         for inputPair, target in zip(inputs, targets):
             color = "red" if target == 0 else "green"
@@ -151,6 +148,8 @@ class NeuralNetwork:
         plt.xlabel("Input A")
         plt.ylabel("Input B")
         plt.title("State Space of Input Vector")
+
+        plt.legend()
 
         plt.grid(True, linewidth=1, linestyle=":")
         plt.tight_layout()
@@ -166,6 +165,6 @@ inputs = [
   [1,0],
   [1,1]
 ]
-targets = [0, 1, 1, 1]
+targets = [0, 1, 1, 0]
 neuralNetwork.trainUntilPass(inputs, targets, maxIterations=10000, minPrecision=0.1)
 neuralNetwork.showStateSpaceRepresentation(inputs, targets)
