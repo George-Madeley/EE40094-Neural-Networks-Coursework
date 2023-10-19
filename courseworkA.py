@@ -1,170 +1,102 @@
+from neuralNetwork import NeuralNetwork
+import pandas as pd
 import numpy as np
-import scipy.special
+import matplotlib.cm as cm
 import matplotlib.pyplot as plt
+import progressbar
 
-class NeuralNetwork:
-    def __init__(self, numInputNodes, numOutputNodes, learningRate, *numHiddenNodesPerLayer):
-        self.numInputNodes = numInputNodes + 1
-        self.numHiddenNodesPerLayer = [numHiddenNodes + 1 for numHiddenNodes in numHiddenNodesPerLayer]
-        self.numOutputNodes = numOutputNodes
-        self.numLayers = len(numHiddenNodesPerLayer) + 1
+df_test_data = pd.read_csv("./MNIST/mnist_test.csv", header=None)
+test_labels = np.array(df_test_data[0])
+test_data = np.array(df_test_data[range(1, df_test_data.shape[1])], dtype=float) / 255
+numTestRows, numTestCols = test_data.shape
 
-        self.learningRate = learningRate
+df_train_data = pd.read_csv("./MNIST/mnist_train.csv", header=None)
+train_labels = np.array(df_train_data[0])
+train_data = (
+    np.array(df_train_data[range(1, df_train_data.shape[1])], dtype=float) / 255
+)
+numTrainRows, numTrainCols = train_data.shape
 
-        self.activation = lambda x: scipy.special.expit(x)
+numUniqueOutputs = len(df_train_data[0].unique())
 
-        
-        self.weights = []
+print("train data")
+y_value = np.zeros((1, 10))
+for i in range(numUniqueOutputs):
+    print("occurance of ", i, "=", np.count_nonzero(train_labels == i))
+    y_value[0, i - 1] = np.count_nonzero(train_labels == i)
 
-        if self.numLayers <= 1 or self.numHiddenNodesPerLayer[0] <= 1:
-            self.weights.append(np.random.normal(
-                0.0,
-                pow(self.numOutputNodes, -0.5),
-                (self.numOutputNodes, self.numInputNodes)
-            ))
-        else:
-            self.weights.append(np.random.normal(
-                0.0,
-                pow(self.numHiddenNodesPerLayer[0] - 1, -0.5),
-                (self.numHiddenNodesPerLayer[0] - 1, self.numInputNodes)
-            ))
+# converting train_label in one hot encoder representation
+train_labels_OHE = np.zeros((numTrainRows, numUniqueOutputs))
+for rowIdx in range(numTrainRows):
+    label = train_labels[rowIdx]
+    for colIdx in range(numUniqueOutputs):
+        if label == colIdx:
+            train_labels_OHE[rowIdx, label] = 1
+print("train_data shape=" + str(np.shape(train_data)))
+print("train_label shape=" + str(np.shape(train_labels_OHE)))
 
-            for i in range(1, self.numLayers - 1):
-                self.weights.append(np.random.normal(
-                    0.0,
-                    pow(self.numHiddenNodesPerLayer[i] - 1, -0.5),
-                    (self.numHiddenNodesPerLayer[i] - 1, self.numHiddenNodesPerLayer[i - 1])
-                ))
+test_labels_OHE = np.zeros((numTestRows, numUniqueOutputs))
+for rowIdx in range(numTestRows):
+    label = test_labels[rowIdx]
+    for colIdx in range(numUniqueOutputs):
+        if label == colIdx:
+            test_labels_OHE[rowIdx, label] = 1
+print("test_data shape=" + str(np.shape(test_data)))
+print("test_label shape=" + str(np.shape(test_labels_OHE)))
 
-            self.weights.append(np.random.normal(
-                0.0,
-                pow(self.numOutputNodes, -0.5),
-                (self.numOutputNodes, self.numHiddenNodesPerLayer[-1])
-            ))
+LEARNING_RATE = 0.3
+NUM_INPUT_NODES = numTrainCols
+NUM_OUTPUT_NODES = numUniqueOutputs
 
-    def train(self, inputs, targets):
-        inputs = np.append(np.array(inputs, ndmin=2), [[1]], axis=1).T
-        targets = np.array(targets, ndmin=2).T
+NUM_HIDDEN_NODES = [28]
+print(f"Num Inputs:\t{NUM_INPUT_NODES}")
+print(f"Num Hidden:\t{NUM_HIDDEN_NODES}")
+print(f"Num Outputs:\t{NUM_OUTPUT_NODES}")
+neuralNetwork = NeuralNetwork(
+    NUM_INPUT_NODES, NUM_OUTPUT_NODES, LEARNING_RATE, *NUM_HIDDEN_NODES
+)  
 
-        activationInputs = [None]
-        activationOutputs = [inputs]
-        for layerIdx in range(self.numLayers):
-            activationInputs.append(np.dot(self.weights[layerIdx], activationOutputs[-1]))
-            activationOutputs.append(self.activation(activationInputs[-1]))
-            if layerIdx < self.numLayers - 1:
-                activationOutputs[-1] = np.append(activationOutputs[-1], [[1]], axis=0)
-        # print("Activation Inputs:\n", activationInputs)
-        # print("Activation Outputs:\n", activationOutputs)
+PASS_CRITERIA = 0.9
 
-        errors = self.calculateErrors(targets, activationOutputs)
-        # print("Errors:\n", errors)
-        self.updateWeights(activationOutputs, errors)
-        # print("------------------------------------------")
+outputsNN = np.zeros(test_labels_OHE.shape, dtype=float)
 
-    def calculateErrors(self, targets, activationOutputs):
-        errors = [0 for layer in range(self.numLayers)]
-        errors[-1] = targets - activationOutputs[-1]
-        for layerIdx in range(1, self.numLayers):
-            errors[-(layerIdx + 1)] = np.dot(self.weights[-layerIdx].T, errors[layerIdx])
-        return errors
-
-    def updateWeights(self, activationOutputs, errors):
-        for layerIdx in range(1, self.numLayers + 1):
-            # print(f"WEIGHTS:\n{self.weights}")
-            layerError = errors[-layerIdx]
-            activationOutput = activationOutputs[-layerIdx]
-            prevActivationOutput = activationOutputs[-(layerIdx + 1)]
-            # print(f"Layer Error:\t {layerError.shape}\n{layerError}")
-            # print(f"Activation Output:\t {activationOutput.shape}\n{activationOutput}")
-            # print(f"Prev Activation Output T:\t {prevActivationOutput.T.shape}\n{prevActivationOutput.T}")
-            product = (layerError * activationOutput * (1.0 - activationOutput))
-            if layerIdx > 1:
-                product = product[:-1]
-            # print(f"Product:\t{product.shape}\n{product}")
-            # print(f"Weight:\n{self.weights[-layerIdx]}")
-            dotProduct = (prevActivationOutput @ product.T).T
-            # print(f"dotProduct:\n{dotProduct}")
-            self.weights[-layerIdx] += self.learningRate * dotProduct
-            # print("==========================================")
-
-    def query(self, inputs):
-        inputs = np.append(np.array(inputs, ndmin=2), [[1]], axis=1).T
-
-        activationInputs = [None]
-        activationOutputs = [inputs]
-        for layerIdx in range(self.numLayers):
-            activationInput = np.dot(self.weights[layerIdx], activationOutputs[-1])
-            if len(activationInput.shape) != 2:
-                activationInput = np.reshape(activationInput, (activationInput.shape[0], 1))
-            activationInputs.append(activationInput)
-            activationOutputs.append(self.activation(activationInputs[-1]))
-            if layerIdx < self.numLayers - 1:
-                activationOutputs[-1] = np.append(activationOutputs[-1], [1])
-
-        return activationOutputs[-1][0][0]
-    
-    def trainUntilPass(self, inputs, targets, maxIterations=10000, minPrecision=0.01):
-        numIterations = 0
-        precision = np.inf
-
-        outputs = np.array([0 for target in targets], dtype=float)
-        targets = np.array(targets)
-
-        while numIterations < maxIterations and precision > minPrecision:
-            for index in range(len(inputs)):
-                self.train(inputs[index], targets[index])
-
-            for index in range(len(inputs)):
-                output = neuralNetwork.query(inputs[index])
-                outputs[index] = output
-
-            precision = np.sum(np.abs(targets - outputs)) / len(inputs)
-            numIterations += 1
-
-            print("Iteration:\t", numIterations)
-            print("Precision:\t", precision)
-            print("\n")
-
-        for index in range(len(inputs)):
-            print("Inputs:\t", inputs[index])
-            print("Outputs:\t", outputs[index])
-
-    def showStateSpaceRepresentation(self, inputs, targets):
-        for layerIdx in range(self.numLayers):
-            weights = self.weights[layerIdx]
-            for weightIdx, weight in enumerate(weights):
-                bias = weight[-1]
-                seperatorLineX = np.linspace(-1, 2, 100)
-                seperatorLineY = (-weight[0]/weight[1])*seperatorLineX-(bias/weight[1])
-                plt.plot(seperatorLineX, seperatorLineY, label=f"Seperator {layerIdx},{weightIdx}")
-
-        for inputPair, target in zip(inputs, targets):
-            color = "red" if target == 0 else "green"
-            plt.scatter(inputPair[0], inputPair[1], s=50, color=color, zorder=3)
-
-        plt.xlim(-0.5, 1.5)
-        plt.ylim(-0.5, 1.5)
-
-        plt.xlabel("Input A")
-        plt.ylabel("Input B")
-        plt.title("State Space of Input Vector")
-
-        plt.legend()
-
-        plt.grid(True, linewidth=1, linestyle=":")
-        plt.tight_layout()
-        plt.show()
-
-        
-
-    
-neuralNetwork = NeuralNetwork(2, 1, 0.1, 2)
-inputs = [
-  [0,0],
-  [0,1],
-  [1,0],
-  [1,1]
+widgets = [
+    " TRAINING: [",
+    progressbar.Percentage(),
+    "]",
+    progressbar.Bar(),
+    " (",
+    progressbar.Timer(),
+    ") ",
 ]
-targets = [0, 1, 1, 0]
-neuralNetwork.trainUntilPass(inputs, targets, maxIterations=10000, minPrecision=0.1)
-neuralNetwork.showStateSpaceRepresentation(inputs, targets)
+for rowIdx in progressbar.progressbar(
+    range(numTrainRows), redirect_stdout=True, widgets=widgets
+):
+    row = train_data[rowIdx]
+    targets = train_labels_OHE[rowIdx]
+    neuralNetwork.train(row, targets)
+
+widgets = [
+    " TESTING:  [",
+    progressbar.Percentage(),
+    "]",
+    progressbar.Bar(),
+    " (",
+    progressbar.Timer(),
+    ") ",
+]
+for rowIdx in progressbar.progressbar(
+    range(numTestRows), redirect_stdout=True, widgets=widgets
+):
+    row = test_data[rowIdx]
+    output = neuralNetwork.query(row)
+    outputNN = outputsNN[rowIdx]
+    outputsNN[rowIdx] = np.reshape(output, (numUniqueOutputs))
+
+outputsNN = outputsNN * test_labels_OHE
+numPassed = (outputsNN >= PASS_CRITERIA).sum()
+
+print(f"Passed:\t{numPassed}/{numTestRows}")
+
+# neuralNetwork.trainUntilPass(df_train, df_test, maxIterations=MAX_ITERATIONS, minPrecision=PRECISION)
+# neuralNetwork.showStateSpaceRepresentation(inputs, targets)
